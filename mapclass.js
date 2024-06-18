@@ -14,7 +14,7 @@ class MyMap {
         this.cluster = options.cluster || false;
         this.center = options.center || [37.588144, 55.733842];
         this.zoom = options.zoom || 10;
-        this.behaviors = options.behaviors || [];
+        this.behaviors = options.behaviors || ['drag', 'scrollZoom', 'pinchZoom', 'dblClick'];
         this.styles = options.styles || {};
         this.container = options.container;
     }
