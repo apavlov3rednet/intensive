@@ -1,10 +1,12 @@
+import { markersGeoJsonSource } from "./common";
+
 class MyMap {
     constructor(
         options = {
             container: "map", //контейнер карты, указатель на идентификатор
             points: {}, //отметки на карте
             cluster: false, //кластеризация карты
-            center: [37.588144, 55.733842], //центр карты
+            center: [45.035469, 38.975309], //центр карты
             zoom: 10, // приближение 1-12
             behaviors: [], // события 'drag', 'scrollZoom', 'pinchZoom', 'dblClick'
             styles: {}, //настройка стилей
@@ -12,11 +14,17 @@ class MyMap {
     ) {
         this.points = options.points || {};
         this.cluster = options.cluster || false;
-        this.center = options.center || [37.588144, 55.733842];
+        this.center = options.center || [38.975309, 45.035469];
         this.zoom = options.zoom || 10;
-        this.behaviors = options.behaviors || ['drag', 'scrollZoom', 'pinchZoom', 'dblClick'];
+        this.behaviors = options.behaviors || [
+            "drag",
+            "scrollZoom",
+            "pinchZoom",
+            "dblClick",
+        ];
         this.styles = options.styles || {};
         this.container = options.container;
+        this.isCluster = options.isCluster || false;
     }
 
     async Init() {
@@ -24,21 +32,31 @@ class MyMap {
         this.InitMap();
         this.SetSchema();
         this.SetTools();
-        this.SetMarkers();
+
+        if (this.isCluster) this.SetCluster();
+        else this.SetMarkers();
     }
 
     async InitCore() {
         //асинхронный метод
         await ymaps3.ready; //ожтдание подключения ядра карт
-        const { 
-            YMap, 
-            YMapDefaultSchemeLayer, 
+        const {
+            YMap,
+            YMapDefaultSchemeLayer,
             YMapFeatureDataSource,
             YMapControls,
-            YMapMarker, 
+            YMapMarker,
+            YMapLayer,
+            YMapDefaultFeaturesLayer,
         } = ymaps3;
         const { YMapZoomControl } = await ymaps3.import(
             "@yandex/ymaps3-controls@0.0.1"
+        );
+        const { YMapDefaultMarker } = await ymaps3.import(
+            "@yandex/ymaps3-markers@0.0.1"
+        );
+        const { Feature, YMapClusterer, clusterByGrid } = await ymaps3.import(
+            "@yandex/ymaps3-clusterer@0.0.1"
         );
 
         this.ymap = YMap;
@@ -46,7 +64,13 @@ class MyMap {
         this.ymapControls = YMapControls;
         this.ymapZoomControl = YMapZoomControl;
         this.ymapMarker = YMapMarker;
-        this.ymapFeatureDataSorce = YMapFeatureDataSource;
+        this.ymapFeatureDataSource = YMapFeatureDataSource;
+        this.ymapDefaultFeaturesLayer = YMapDefaultFeaturesLayer;
+        this.ymapDefaultMarker = YMapDefaultMarker;
+        this.Feature = Feature;
+        this.ymapLayer = YMapLayer;
+        this.ymapClusterer = YMapClusterer;
+        this.clusterByGrid = clusterByGrid;
     }
 
     InitMap() {
@@ -64,7 +88,13 @@ class MyMap {
                     zoom: _this.zoom, // Уровень масштабирования
                 },
                 behaviors: _this.behaviors,
-            }
+            },
+            [
+                // Добавление схемы слоев карты
+                new _this.ymapDefaultSchemeLayer({}),
+                // добавление геообъектов на карту
+                new _this.ymapDefaultFeaturesLayer({}),
+            ]
         );
     }
 
@@ -109,35 +139,84 @@ class MyMap {
     }
 
     SetMarkers() {
-        // map.addChild(new YMapMarker({
-        //     coordinates: [37, 55],
-        //     draggable: true
-        // }, content));
-
-        
-        if (Object.keys(this.points).length > 0) {
-            for (let i in this.points) {
-                let point = this.points[i];
-                console.log(this);
-                this.map.addChild(
-                    new this.ymapMarker(
-                        {
-                            coordinates: point.coords,
-                            draggable: point.draggable || false,
-                        },
-                        point.content || ''
-                    )
-                );
-            }
+        let _this = this;
+        if (this.points.length > 0) {
+            console.log(this.points);
+            this.points.forEach((markerSource) => {
+                const marker = new _this.ymapDefaultMarker(markerSource);
+                _this.map.addChild(marker);
+            });
         }
+    }
+
+    SetCluster() {
+        let _this = this;
+        let points = [];
+
+        _this.map.addChild(new _this.ymapDefaultSchemeLayer({}))
+        .addChild(new _this.ymapFeatureDataSource({id: 'clusterer-source'}))
+        .addChild(new _this.ymapLayer({source: 'clusterer-source', type: 'markers', zIndex: 1800}));
+
+        const contentPin = document.createElement('div');
+          
+        //contentPin.innerHTML = '<img src="../pin.svg" class="pin">';
+
+        function circle(count) {
+            const circle = document.createElement('div');
+            circle.classList.add('circle');
+            circle.innerHTML = `
+                <div class="circle-content">
+                    <span class="circle-text">${count}</span>
+                </div>
+            `;
+            return circle;
+        }
+
+        this.points.forEach((item, index) => {
+            points.push({
+                type: "Feature",
+                id: index.toString,
+                geometry: {
+                    type: "Point",
+                    coordinates: item.coordinates,
+                    title: item.title,
+                    subtitle: item.subtitle,
+                    color: item.color,
+                },
+            });
+        });
+
+        const marker = (feature) =>
+            new _this.ymapMarker(
+                {
+                    coordinates: feature.geometry.coordinates,
+                    source: "clusterer-source",
+                },
+                contentPin.cloneNode(true)
+            );
+
+        const cluster = (coordinates, features) =>
+            new _this.ymapMarker(
+                {
+                    coordinates,
+                    source: "clusterer-source",
+                },
+                circle(features.length).cloneNode(true)
+            );
+
+        const clusterer = new this.ymapClusterer({
+            method: _this.clusterByGrid({ gridSize: 128 }),
+            features: points,
+            marker,
+            cluster,
+        });
+        this.map.addChild(clusterer);
     }
 }
 
-const map = new MyMap({ 
+const map = new MyMap({
     container: "map",
-    points: {
-        1: {coords: [37,55], content: 'test'},
-        2: {coords: [37,56], content: 'test2'}
-    }
- });
+    points: markersGeoJsonSource,
+    isCluster: true,
+});
 map.Init();
