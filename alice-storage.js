@@ -11,7 +11,7 @@ module.exports.handler = async (event, context) => {
         if(context._data.request.nlu.entities.length > 0) {
             context._data.request.nlu.entities.forEach(item => {
                 if(item.type === 'YANDEX.GEO') {
-                    city = context._data.request.nlu.entities.value.city;
+                    
                 }
             });
         }
@@ -32,11 +32,5 @@ module.exports.handler = async (event, context) => {
             text: text,
             end_session: false
         },
-        //Добавляем это и дальше на каждой итерации разбираем
-        session_state: {
-            city: city,
-            eventName: null,
-
-        }
     };
 };
