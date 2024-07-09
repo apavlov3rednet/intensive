@@ -12,12 +12,16 @@ module.exports.handler = async (event, context) => {
         return state[name] ? state[name] : false;
     }
 
-    function make_response(text) {
+    function make_response(options = {
+        text: '',
+        state: {},
+        buttons: []
+    }) {
         return {
             response: {
-                text: text,
-                
+                text: options.text,  
             },
+            buttons: options.buttons || [],
             session_state: {
                 city: city,
                 eventName: eventName,
@@ -28,21 +32,50 @@ module.exports.handler = async (event, context) => {
         }
     }
 
+    function button(title, payload = false, url = false, hide = false) {
+        let button = {
+            title: title,
+            hide : hide,
+        }
+
+        if(payload) {
+            button.payload = payload;
+        }
+
+        if(url) {
+            button.url = url;
+        }
+        return button;
+    }
+
     function welcome(event) {
-        return make_response('Вас приветсвуте помощник по подбору мероприятий. Куда вы хотели бы сходить?');
+        return make_response({
+            text: 'Вас приветсвуте помощник по подбору мероприятий. Куда вы хотели бы сходить?',
+            buttons: [
+                button('В кино'),
+                button('В театр'),
+                button('На концерт'),
+            ]
+        });
     }
     
     function fallback(event) {
-        return make_response('Извините, я вас не понял. Переформулируйте свой запрос.');
+        return make_response({text: 'Извините, я вас не понял. Переформулируйте свой запрос.'});
     }
 
     function setEventType(event) {
         let intent = event.request.nlu.intents.eventType;
         if(intent) {
-            eventType = intent.slots.event.value;
-            text = 'На какое время?';
+            return make_response({
+                text: 'На какое время?',
+                state: {
+                    eventType : intent.slots.event.value
+                }
+            });
         }
-       
+        else {
+            return fallback();
+        }
     }
 
     function AboutEvent(event) {
@@ -70,7 +103,7 @@ module.exports.handler = async (event, context) => {
     if(event.session.new) {
         return welcome();
     }
-    else if(eventType in intents) {
+    else if(Object.keys(intents).length > 0) {
         setEventType();
         AboutEvent();
         //return CurrentEvents();
@@ -78,59 +111,4 @@ module.exports.handler = async (event, context) => {
     else {
         return fallback();
     }
-
-    // if (request["original_utterance"].length > 0) {
-
-    //     //Привязка города
-    //     if(context._data.request.nlu.entities.length > 0) {
-    //         context._data.request.nlu.entities.forEach(item => {
-    //             if(item.type === 'YANDEX.GEO') {
-    //                 city = item.value.city;
-    //             }
-    //         });
-    //     }
-
-    //     if(!eventType) {
-    //         eventType = request["original_utterance"];
-    //     }
-
-    //     if(!city) {
-    //         text = 'В каком вы городе?';
-    //     }
-
-    //     if(city && eventType && !location) {
-
-    //         switch(eventType) {
-    //             case 'кино':
-    //                 text = 'В каком кинотеатре?';
-    //             break;
-
-    //             case 'театр':
-    //                 text = 'В каком театре?';
-    //             break;
-    //         }
-            
-
-    //         location = request["original_utterance"];
-    //     }
-        
-    // }
-    // return {
-    //     version,
-    //     session,
-    //     response: {
-    //         text: text,
-    //         end_session: false
-    //     },
-    //     test_state: state,
-    //     req: request,
-    //     context: context,
-    //     session: session,
-    //     session_state: {
-    //         city: city,
-    //         eventName: eventName,
-    //         eventType: eventType,
-    //         location: location
-    //     },
-    // };
 };
