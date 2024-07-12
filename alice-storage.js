@@ -6,36 +6,17 @@ module.exports.handler = async (event, context) => {
     let eventName = getState('eventName');  //название события
     let location = getState('location');    //местоположение
     let intents = event.request.nlu.intents;
+    
 
     function getState(name) {
         let state = context._data.state ? context._data.state.session : false; 
         return state[name] ? state[name] : false;
     }
 
-    function make_response(options = {
-        text: '',
-        state: {},
-        buttons: []
-    }) {
-        return {
-            response: {
-                text: options.text,  
-            },
-            buttons: options.buttons || [],
-            session_state: {
-                city: city,
-                eventName: eventName,
-                eventType: eventType,
-                location: location
-            },
-            version: '1.0'
-        }
-    }
-
     function button(title, payload = false, url = false, hide = false) {
         let button = {
             title: title,
-            hide : hide,
+            hide: hide
         }
 
         if(payload) {
@@ -45,68 +26,121 @@ module.exports.handler = async (event, context) => {
         if(url) {
             button.url = url;
         }
+
         return button;
     }
 
-    function welcome(event) {
-        return make_response({
-            text: 'Вас приветсвуте помощник по подбору мероприятий. Куда вы хотели бы сходить?',
-            buttons: [
-                button('В кино'),
-                button('В театр'),
-                button('На концерт'),
-            ]
-        });
-    }
-    
-    function fallback(event) {
-        return make_response({text: 'Извините, я вас не понял. Переформулируйте свой запрос.'});
+    function make_response(options = {
+        text: '',
+        state: {},
+        buttons: []
+    }) {
+        if(options.text.length == 0) {
+            options.text = 'Задайте свой вопрос';
+        }
+
+        return {
+            response: {
+                text: options.text,
+                buttons: options.buttons || [],
+            },
+            session_state: {
+                city:  city,
+                eventName:  eventName,
+                eventType:  eventType,
+                location:  location,
+                intents: intents
+            },
+            version: '1.0'
+        }
     }
 
-    function setEventType(event) {
-        let intent = event.request.nlu.intents.eventType;
-        if(intent) {
+    function welcome(event) {
+        if(city) {
             return make_response({
-                text: 'На какое время?',
-                state: {
-                    eventType : intent.slots.event.value
-                }
+                text: 'Вас приветсвуте помощник по подбору мероприятий. Куда вы хотели бы сходить?',
+                buttons: [
+                    button('В кино', false, false, true),
+                    button('В театр', false, false, true),
+                    button('На концерт', false, false, true),
+                ]
             });
         }
         else {
-            return fallback();
+            //todo: Дописать запрос геолокации
+            return make_response({
+                text: 'Вас приветсвуте помощник по подбору мероприятий. Куда вы хотели бы сходить?',
+                buttons: [
+                    button('В кино', false, false, true),
+                    button('В театр', false, false, true),
+                    button('На концерт', false, false, true),
+                ]
+            });
         }
     }
+    
+    function fallback(event, methodName) {
+        return make_response({
+            text: `Извините, я вас не понял. Переформулируйте свой запрос. ${methodName}`
+        });
+    }
 
-    function AboutEvent(event) {
-        let intent = event.request.nlu.intents.about_event_info;
+    function AboutType(event) {
+            eventType = intent.slots.event.value;
+            text = 'На какое время?';
+            return make_response({text: text})
+    }
 
-        if(intent) {
-            let value = intent.slots.event.value;
+    function ChoiceEvent(event) {
+            let value = request.nlu.intents.choice_event.slots.event.value;
+
+            let state = {
+                eventType: value
+            }
 
             switch(value) {
                 case "cinema":
-    
+                    return make_response({
+                        text: 'В какой кинотеатр?', 
+                        state: state
+                    });
                 break;
     
                 case "piece":
-    
+                    return make_response({
+                        text: 'В какой театр?', 
+                        state: state
+                    });
+                break;
+
+                case "concert":
+                    return make_response({
+                        text: 'На какой концерт вы хотели бы сходить?', 
+                        state: state
+                    });
                 break;
     
                 default:
-                    return fallback();
+                    return false
                 break;
             }
-        }
     }
 
     if(event.session.new) {
         return welcome();
     }
     else if(Object.keys(intents).length > 0) {
-        setEventType();
-        AboutEvent();
-        //return CurrentEvents();
+        let intents = request.nlu.intents;
+        let response;
+
+        if(intents.choice_event) {
+            response = ChoiceEvent();
+        }
+
+        if(intents.about_event) {
+            response = AboutEvent();
+        }
+        return response;
     }
     else {
         return fallback();

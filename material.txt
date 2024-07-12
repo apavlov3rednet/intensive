@@ -1,0 +1,1 @@
+https://github.com/yandex/alice-skills/tree/master/python/scenes/kremlin_tour

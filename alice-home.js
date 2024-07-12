@@ -1,5 +1,10 @@
 module.exports.handler = async (event, context) => {
     const {version, session, request} = event;
+    const STATE_REQUEST_KEY = 'session';
+    const STATE_RESPONSE_KEY = 'session_state';
+    const GEOLOCATION_ALLOWED = 'Geolocation.Allowed';
+    const GEOLOCATION_REJECTED = 'Geolocation.Rejected';
+ 
     //Хранение пользовательских запросов
     let city = getState('city');            //город
     let eventType = getState('eventType');  //тип события
@@ -33,7 +38,8 @@ module.exports.handler = async (event, context) => {
     function make_response(options = {
         text: '',
         state: {},
-        buttons: []
+        buttons: [],
+        directives: {}
     }) {
         if(options.text.length == 0) {
             options.text = 'Задайте свой вопрос';
@@ -43,6 +49,7 @@ module.exports.handler = async (event, context) => {
             response: {
                 text: options.text,
                 buttons: options.buttons || [],
+                directives: options.directives || {}
             },
             session_state: {
                 city:  city,
@@ -52,6 +59,23 @@ module.exports.handler = async (event, context) => {
                 intents: intents
             },
             version: '1.0'
+        }
+    }
+
+    function geolocation_callback(event) {
+        if(event.request.type === GEOLOCATION_ALLOWED) {
+            location = event.session.location;
+            lat = location.lat;
+            lon = location.lon;
+            text = `Ваши координаты: широта ${lat}, долгота ${lon}`;
+
+            return make_response({text: text});
+        }
+        else {
+            text = 'К сожалению, мне не удалось получить ваши координаты. Чтобы продолжить работу мне нужно знать где вы находитесь.';
+            return make_response({text: text, directives: {
+                request_geolocation: {}
+            }});
         }
     }
 
@@ -67,14 +91,16 @@ module.exports.handler = async (event, context) => {
             });
         }
         else {
-            //todo: Дописать запрос геолокации
             return make_response({
                 text: 'Вас приветсвуте помощник по подбору мероприятий. Куда вы хотели бы сходить?',
                 buttons: [
                     button('В кино', false, false, true),
                     button('В театр', false, false, true),
                     button('На концерт', false, false, true),
-                ]
+                ],
+                directives: {
+                    request_geolocation: {}
+                }
             });
         }
     }
@@ -131,18 +157,23 @@ module.exports.handler = async (event, context) => {
     }
     else if(Object.keys(intents).length > 0) {
         let intents = request.nlu.intents;
+        let state = event.state[STATE_REQUEST_KEY] || {};
         let response;
 
+        if(event.request.type === GEOLOCATION_REJECTED || event.request.type === GEOLOCATION_ALLOWED) {
+            return geolocation_callback(event);
+        }
+
         if(intents.choice_event) {
-            response = ChoiceEvent();
+            response = ChoiceEvent(event);
         }
 
         if(intents.about_event) {
-            response = AboutEvent();
+            response = AboutEvent(event);
         }
         return response;
     }
     else {
-        return fallback();
+        return fallback(event);
     }
 };
