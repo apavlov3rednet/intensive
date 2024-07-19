@@ -37,10 +37,12 @@ module.exports.handler = async (event, context) => {
     function make_response(
         options = {
             text: "",
+            tts: false,
             state: {},
             buttons: [],
             directives: {},
             card: {},
+            hints: {}
         }
     ) {
         if (options.text.length == 0) {
@@ -53,6 +55,10 @@ module.exports.handler = async (event, context) => {
             },
             version: "1.0",
         };
+
+        if(options.tts) {
+            response.response.tts = options.tts;
+        }
 
         if (options.buttons) {
             response.response.buttons = options.buttons;
@@ -68,6 +74,10 @@ module.exports.handler = async (event, context) => {
 
         if(options.card) {
             response.response.card = options.card;
+        }
+
+        if(options.hints) {
+            response.response.hints = options.hints;
         }
 
         return response;
@@ -94,8 +104,11 @@ module.exports.handler = async (event, context) => {
     }
 
     function fallback(event, methodName) {
+        text = `Извините, я вас не понял. Переформулируйте свой запрос. ${methodName}`;
         return make_response({
-            text: `Извините, я вас не понял. Переформулируйте свой запрос. ${methodName}`,
+            text: text,
+            //tts: '<audio-voice id="997614/8fd63b6c168a70fb3750" medium />',
+            tts: text
         });
     }
 
@@ -104,6 +117,8 @@ module.exports.handler = async (event, context) => {
             let location = event.session.location;
             let newState = state;
             newState.location = location;
+
+            city = maps.getCityName(location);
 
             return make_response({
                 text: "Куда вы хотели бы сходить?",
@@ -129,7 +144,7 @@ module.exports.handler = async (event, context) => {
     function AboutType(event, state) {
         eventType = intent.slots.event.value;
         text = "На какое время?";
-        return make_response({ text: text, state: state });
+        return make_response({ text: text, tts: text, state: state });
     }
 
     function ChoiceEvent(event, state) {
@@ -186,6 +201,7 @@ module.exports.handler = async (event, context) => {
 
         return make_response({
             text: text,
+            tts: text,
             state: state,
             buttons: [
                 button(`Расскажи о ${eventTypeName}`),
@@ -198,15 +214,17 @@ module.exports.handler = async (event, context) => {
         // switch(event.request.intents.about_event.slots.eventname.value) {
         //     case 'avatar':
                 text = 'Бывший морпех Джейк Салли прикован к инвалидному креслу. Несмотря на немощное тело, Джейк в душе по-прежнему остается воином. Он получает задание совершить путешествие в несколько световых лет к базе землян на планете Пандора, где корпорации добывают редкий минерал, имеющий огромное значение для выхода Земли из энергетического кризиса.';
+                tts = 'Бывший морпех Джейк Салли прикован к инвалидному креслу.sil<[1000]> Несмотря на немощное тело, Джейк в душе по-прежнему остается воином! Он получает задание совершить путешествие в несколько световых лет к базе землян на планете Пандора, где корпорации добывают редкий минерал, имеющий огромное значение для выхода Земли из энергетического кризиса.';
+
+                
                 return make_response({
                     text: text,
+                    tts: tts,
                     state: state,
                     card: {
-                        type: "ImageGallery",
-                        items: [
-                            { image_id: '997614/8fd63b6c168a70fb3750'},
-                            {image_id: '965417/0bcddb51fa03cebf37dc'}
-                        ],
+                        type: "BigImage",
+                        image_id: '997614/8fd63b6c168a70fb3750',
+                        description: text
                     }
                 })
         //     break;
