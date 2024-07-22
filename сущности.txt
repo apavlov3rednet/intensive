@@ -16,8 +16,19 @@ entity City:
     lemma: true
     values:
         krd:
-            Выдать на 1 день
-            Выдать на 1 час
-        cnsl:
-            Запретить
+            Разрешить на 1 час
+            Разрешить на 1 день
+        cncl:
+            Не разрешать
+entity EventName:
+    lemma: true
+    values:
+        avatar:
+            аватар
+        starwars:
+            звездные войны
+        startrack:
+            звездный путь
+            стар трек
+            star track
         

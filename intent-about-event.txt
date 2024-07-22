@@ -1,6 +1,0 @@
-slots:
-    event:
-        source: $Event
-        type: Event
-root:
-    Расскажи про $Event

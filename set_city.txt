@@ -1,0 +1,8 @@
+slots:
+    City:
+        source: $City
+        type: City
+root:
+    Разрешить на 1 час
+    Разрешить на 1 день
+    Не разрешать
