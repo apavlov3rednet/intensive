@@ -12,6 +12,10 @@ module.exports.handler = async (event, context) => {
     let location = getState("location"); //местоположение
     let intents = event.request.nlu.intents;
 
+    let sheet = {
+
+    };
+
     function getState(name) {
         let state = context._data.state ? context._data.state.session : false;
         return state[name] ? state[name] : false;
@@ -112,13 +116,38 @@ module.exports.handler = async (event, context) => {
         });
     }
 
-    function GeolocationCallback(event, state) {
+    async function getCityName(loc) {
+        var url = "http://suggestions.dadata.ru/suggestions/api/4_1/rs/geolocate/address";
+        var token = "7b2755b3e17759a5541088f65d7b111701408985";
+        var query = { lat: loc.lat, lon: loc.lon, count: 1, ratius: 100 };
+        
+        var options = {
+            method: "POST",
+            mode: "cors",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": "Token " + token
+            },
+            body: JSON.stringify(query)
+        }
+        
+        result = await fetch(url, options);
+        return await result.text();
+    }
+
+    async function GeolocationCallback(event, state) {
         if (event.session.location) {
             let location = event.session.location;
             let newState = state;
-            newState.location = location;
 
-            city = maps.getCityName(location);
+            newState.location = location;
+            city = await getCityName(location);
+            suggestion = JSON.parse(city).suggestions[0];
+            newState.city = {
+                title: suggestion.data.city,
+                code: suggestion.data.region_iso_code
+            };
 
             return make_response({
                 text: "Куда вы хотели бы сходить?",
@@ -196,6 +225,7 @@ module.exports.handler = async (event, context) => {
         text = 'Вот что я могу вам предложить';
 
         state.eventName = event.request.nlu.tokens;
+        state.eventCode = request.nlu.intents.set_event_name.slots.eventname.value;
 
         eventTypeName = state.eventName;        
 
@@ -210,25 +240,57 @@ module.exports.handler = async (event, context) => {
         });
     }
 
-    function AboutEvent(event, state) {
+    async function AboutEvent(event, state) {
+        let schedule = await GetSchedule(state.eventName[0]);
+
+        state.schedule = JSON.parse(schedule);
+
+
         // switch(event.request.intents.about_event.slots.eventname.value) {
         //     case 'avatar':
-                text = 'Бывший морпех Джейк Салли прикован к инвалидному креслу. Несмотря на немощное тело, Джейк в душе по-прежнему остается воином. Он получает задание совершить путешествие в несколько световых лет к базе землян на планете Пандора, где корпорации добывают редкий минерал, имеющий огромное значение для выхода Земли из энергетического кризиса.';
-                tts = 'Бывший морпех Джейк Салли прикован к инвалидному креслу.sil<[1000]> Несмотря на немощное тело, Джейк в душе по-прежнему остается воином! Он получает задание совершить путешествие в несколько световых лет к базе землян на планете Пандора, где корпорации добывают редкий минерал, имеющий огромное значение для выхода Земли из энергетического кризиса.';
-
+                text = state.schedule.docs[0].description;
                 
                 return make_response({
                     text: text,
-                    tts: tts,
+                    tts: text,
                     state: state,
-                    card: {
-                        type: "BigImage",
-                        image_id: '997614/8fd63b6c168a70fb3750',
-                        description: text
-                    }
+                    // card: {
+                    //     type: "BigImage",
+                    //     image_id: '997614/8fd63b6c168a70fb3750',
+                    //     description: text
+                    // }
                 })
         //     break;
         // }
+    }
+
+    async function GetSchedule(query) {
+        var url = "https://api.kinopoisk.dev/v1.4/movie/search?page=1&limit=1&query=" + query;
+        var token = "KDBWWCN-SFXM43X-GB814A7-Y89XAV7";
+        
+        var options = {
+            method: "GET",
+            mode: "cors",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "X-API-KEY": token
+            }
+        }
+        
+        result = await fetch(url, options);
+        return await result.text();
+    }
+
+    async function SetSchedule(event, state) {
+        let schedule = await GetSchedule(state.eventName[0]);
+
+        state.schedule = JSON.parse(schedule);
+
+        return make_response({
+            text: 'text',
+            state: state
+        })
     }
 
     intents = request.nlu.intents;
@@ -239,7 +301,7 @@ module.exports.handler = async (event, context) => {
         return welcome(event);
     } 
     else if (event.session.location && intents.set_city) {
-        return GeolocationCallback(event, state);
+        return await GeolocationCallback(event, state);
     } 
     else if (Object.keys(intents).length > 0) {
         if (intents.choice_event) {
@@ -247,11 +309,15 @@ module.exports.handler = async (event, context) => {
         }
 
         if (intents.about_event) {
-            response = AboutEvent(event, state);
+            response = await AboutEvent(event, state);
         }
 
         if(intents.set_event_name) {
             response = SetEventName(event, state);
+        }
+
+        if(intents.show_schedule) {
+            response = await SetSchedule(event, state);
         }
 
         return response;
