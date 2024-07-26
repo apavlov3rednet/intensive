@@ -30,10 +30,13 @@ module.exports.handler = async (event, context) => {
         if (payload) {
             button.payload = payload;
         }
+        else button.payload = {};
 
         if (url) {
             button.url = url;
         }
+
+        button.type = 'ButtonPressed';
 
         return button;
     }
@@ -176,9 +179,35 @@ module.exports.handler = async (event, context) => {
         return make_response({ text: text, tts: text, state: state });
     }
 
-    function ChoiceEvent(event, state) {
+    async function getListFilms() {
+        let url = 'https://kudago.com/public-api/v1.4/movies/?lang=&fields=&expand=&order_by=&text_format=&ids=&location=krd&premiering_in_location=&actual_since=&actual_until=';
+    
+        var options = {
+            method: "GET",
+            mode: "cors",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        }
+        
+        result = await fetch(url, options);
+        return await result.text();
+    }
+
+    async function ChoiceEvent(event, state) {
         let value = request.nlu.intents.choice_event.slots.event.value;
 
+        let sListFilms = await getListFilms();
+        let listFilms = JSON.parse(sListFilms);
+        let arBtns = [];
+
+        if(listFilms.results) {
+            listFilms.results.forEach(item => {
+                arBtns.push(button(item.title, false, false, true));
+            });
+        }
+        
         let newState = state;
 
         newState.eventType = value;
@@ -191,11 +220,7 @@ module.exports.handler = async (event, context) => {
                 return make_response({
                     text: "На какой фильм?",
                     //выводим афишу в виде кнопок, ниже пример
-                    buttons: [
-                        button("Аватар", false, false, true),
-                        button("Звездные войны", false, false, true),
-                        button("Star Track", false, false, true),
-                    ],
+                    buttons: arBtns,
                     state: newState,
                 });
                 break;
@@ -224,8 +249,8 @@ module.exports.handler = async (event, context) => {
         let eventTypeName;
         text = 'Вот что я могу вам предложить';
 
-        state.eventName = event.request.nlu.tokens;
-        state.eventCode = request.nlu.intents.set_event_name.slots.eventname.value;
+        state.eventName = event.request.nlu.tokens.join(' ');
+        //state.eventCode = request.nlu.intents.set_event_name.slots.eventname.value;
 
         eventTypeName = state.eventName;        
 
@@ -241,7 +266,7 @@ module.exports.handler = async (event, context) => {
     }
 
     async function AboutEvent(event, state) {
-        let schedule = await GetSchedule(state.eventName[0]);
+        let schedule = await GetSchedule(state.eventName);
 
         state.schedule = JSON.parse(schedule);
 
@@ -265,6 +290,9 @@ module.exports.handler = async (event, context) => {
     }
 
     async function GetSchedule(query) {
+        //var url = 'https://kudago.com/public-api/v1.4/movies/1705/showings/?lang=&fields=&expand=&order_by=&location=&actual_since=1444385206&actual_until=1455495406&place=&is_free=';
+
+
         var url = "https://api.kinopoisk.dev/v1.4/movie/search?page=1&limit=1&query=" + query;
         var token = "KDBWWCN-SFXM43X-GB814A7-Y89XAV7";
         
@@ -305,7 +333,7 @@ module.exports.handler = async (event, context) => {
     } 
     else if (Object.keys(intents).length > 0) {
         if (intents.choice_event) {
-            response = ChoiceEvent(event, state);
+            response = await ChoiceEvent(event, state);
         }
 
         if (intents.about_event) {
@@ -321,7 +349,14 @@ module.exports.handler = async (event, context) => {
         }
 
         return response;
-    } else {
+    } 
+    else if(request.type === 'ButtonPressed' && Object.keys(intents).length == 0) {
+        response = SetEventName(event, state);
+
+        return response;
+    }
+    
+    else {
         let directiveType = event.request.type;
         return fallback(event, `Общий сброс. ${directiveType}`);
     }

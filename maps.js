@@ -33,7 +33,6 @@ module.exports.maps = async (event, context) => {
             map = e;
         }
         
-
         return map;
     }
 }
