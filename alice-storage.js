@@ -1,4 +1,7 @@
 module.exports.handler = async (event, context) => {
+
+    const { handle_fetch } = require("./handle_fetch");
+
     const { version, session, request } = event;
     const GEOLOCATION_ALLOWED = "Geolocation.Allowed";
     const GEOLOCATION_REJECTED = "Geolocation.Rejected";
@@ -119,34 +122,19 @@ module.exports.handler = async (event, context) => {
         });
     }
 
-    async function getCityName(loc) {
-        var url = "http://suggestions.dadata.ru/suggestions/api/4_1/rs/geolocate/address";
-        var token = "7b2755b3e17759a5541088f65d7b111701408985";
-        var query = { lat: loc.lat, lon: loc.lon, count: 1, ratius: 100 };
-        
-        var options = {
-            method: "POST",
-            mode: "cors",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "Authorization": "Token " + token
-            },
-            body: JSON.stringify(query)
-        }
-        
-        result = await fetch(url, options);
-        return await result.text();
-    }
-
     async function GeolocationCallback(event, state) {
         if (event.session.location) {
             let location = event.session.location;
             let newState = state;
 
             newState.location = location;
-            city = await getCityName(location);
-            suggestion = JSON.parse(city).suggestions[0];
+            city = await handle_fetch.getExternalFetch(
+                'dadata', 
+                "7b2755b3e17759a5541088f65d7b111701408985", 
+                { lat: loc.lat, lon: loc.lon, count: 1, ratius: 100 },
+                'POST'
+            );
+            suggestion = city.suggestions[0];
             newState.city = {
                 title: suggestion.data.city,
                 code: suggestion.data.region_iso_code
@@ -177,22 +165,6 @@ module.exports.handler = async (event, context) => {
         eventType = intent.slots.event.value;
         text = "На какое время?";
         return make_response({ text: text, tts: text, state: state });
-    }
-
-    async function getListFilms() {
-        let url = 'https://kudago.com/public-api/v1.4/movies/?lang=&fields=&expand=&order_by=&text_format=&ids=&location=krd&premiering_in_location=&actual_since=&actual_until=';
-    
-        var options = {
-            method: "GET",
-            mode: "cors",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-        }
-        
-        result = await fetch(url, options);
-        return await result.text();
     }
 
     async function ChoiceEvent(event, state) {
@@ -266,9 +238,7 @@ module.exports.handler = async (event, context) => {
     }
 
     async function AboutEvent(event, state) {
-        let schedule = await GetSchedule(state.eventName);
-
-        state.schedule = JSON.parse(schedule);
+        state.schedule = await handle_fetch.getExternalFetch('kinopoisk', "KDBWWCN-SFXM43X-GB814A7-Y89XAV7", event.eventName);
 
 
         // switch(event.request.intents.about_event.slots.eventname.value) {
@@ -289,36 +259,12 @@ module.exports.handler = async (event, context) => {
         // }
     }
 
-    async function GetSchedule(query) {
-        //var url = 'https://kudago.com/public-api/v1.4/movies/1705/showings/?lang=&fields=&expand=&order_by=&location=&actual_since=1444385206&actual_until=1455495406&place=&is_free=';
-
-
-        var url = "https://api.kinopoisk.dev/v1.4/movie/search?page=1&limit=1&query=" + query;
-        var token = "KDBWWCN-SFXM43X-GB814A7-Y89XAV7";
-        
-        var options = {
-            method: "GET",
-            mode: "cors",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "X-API-KEY": token
-            }
-        }
-        
-        result = await fetch(url, options);
-        return await result.text();
-    }
-
     async function SetSchedule(event, state) {
-        let schedule = await GetSchedule(state.eventName[0]);
-
-        state.schedule = JSON.parse(schedule);
-
+        state.schedule = await handle_fetch.getExternalFetch('kudago');
         return make_response({
             text: 'text',
             state: state
-        })
+        });
     }
 
     intents = request.nlu.intents;
@@ -358,6 +304,7 @@ module.exports.handler = async (event, context) => {
     
     else {
         let directiveType = event.request.type;
+        
         return fallback(event, `Общий сброс. ${directiveType}`);
     }
 };
